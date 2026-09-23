@@ -292,6 +292,13 @@ const SECTIONS = [
   ]},
   { title: "Dados bancários da agência", agency: true, fields: bancarios("banco_ag") },
   { title: "Dados bancários do influenciador", fields: bancarios("banco_inf") },
+  { title: "Escopo", sub: "Preencha conforme o que foi acordado nas negociações da parceria.", fields: [
+    { name: "escopo_reels", label: "Reels", col: 3, type: "int", optional: true, optionalText: "se acordado", placeholder: "Quantidade", hint: "Caso esse formato tenha sido acordado durante as negociações sobre a parceria" },
+    { name: "escopo_dark_post", label: "Dark Post", col: 3, type: "int", optional: true, optionalText: "se acordado", placeholder: "Quantidade", hint: "Caso esse formato tenha sido acordado durante as negociações sobre a parceria" },
+    { name: "escopo_impulsionamento_dias", label: "Impulsionamento", col: 3, type: "int", placeholder: "Ex.: 30", hint: "Quantidade de dias" },
+    { name: "escopo_periodo", label: "Período da parceria", col: 3, placeholder: "Ex.: 1 mês de parceria (outubro)", hint: "Quantidade de meses e quais meses" },
+    { name: "escopo_valor", label: "Valor do escopo", col: 3, type: "money", placeholder: "Ex.: R$ 4.000,00" },
+  ]},
   { title: "Dados da testemunha", sub: "Pessoa que assinará o contrato como testemunha.", fields: [
     { name: "test_nome", label: "Nome", col: 6 },
     { name: "test_cpf", label: "CPF", col: 3, type: "cpf" },
@@ -319,7 +326,7 @@ const CHECK_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" 
 function renderField(f) {
   const id = `f_${f.name}`;
   const agencyAttr = f.agency ? ' data-agency hidden class="agency-only ' : ' class="';
-  const labelTxt = `${esc(f.label)} ${f.optional ? '<span class="opt">(se houver)</span>' : '<span class="req" aria-hidden="true">*</span>'}`;
+  const labelTxt = `${esc(f.label)} ${f.optional ? `<span class="opt">(${f.optionalText || "se houver"})</span>` : '<span class="req" aria-hidden="true">*</span>'}`;
   let control;
   if (f.type === "select") {
     control = `<select id="${id}" name="${f.name}"><option value="">Selecione</option>${f.options.map(o => `<option>${esc(o)}</option>`).join("")}</select>`;
@@ -336,7 +343,7 @@ function renderField(f) {
     </div>`;
   } else {
     const types = { email: "email", tel: "tel", percent: "number" };
-    const inputmode = { cpf: "numeric", cnpj: "numeric", cep: "numeric", tel: "tel", percent: "decimal" }[f.type] || f.inputmode || "";
+    const inputmode = { cpf: "numeric", cnpj: "numeric", cep: "numeric", tel: "tel", percent: "decimal", int: "numeric", money: "numeric" }[f.type] || f.inputmode || "";
     const ph = { cpf: "000.000.000-00", cnpj: "00.000.000/0000-00", cep: "00000-000", tel: "(00) 00000-0000", email: "nome@email.com", percent: "0" }[f.type] || f.placeholder || "";
     const extra = f.type === "percent" ? ' min="0" max="100" step="0.01"' : "";
     const auto = { email: "email", tel: "tel" }[f.type] || "off";
@@ -387,6 +394,11 @@ const MASKS = {
     if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
     if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
     return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  },
+  int: v => digits(v).slice(0, 4),
+  money: v => {
+    const d = digits(v).replace(/^0+/, "").slice(0, 11);
+    return d ? "R$ " + (parseInt(d, 10) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "";
   },
 };
 
@@ -517,11 +529,16 @@ function validate() {
     else if (type === "cep" && digits(v).length !== 8) mark(field, "CEP inválido.");
     else if (type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) mark(field, "E-mail inválido.");
     else if (type === "tel" && digits(v).length < 10) mark(field, "Telefone inválido.");
+    else if (type === "money" && !(parseInt(digits(v), 10) > 0)) mark(field, "Informe o valor do escopo.");
     else if (type === "percent") {
       const p = parseFloat(v.replace(",", "."));
       if (isNaN(p) || p < 0 || p > 100) mark(field, "Informe um valor entre 0 e 100.");
     }
   });
+
+  const reels = parseInt(form.elements.escopo_reels.value, 10) || 0;
+  const dark = parseInt(form.elements.escopo_dark_post.value, 10) || 0;
+  if (!reels && !dark) mark(document.querySelector('[data-name="escopo_reels"]'), "Informe a quantidade de Reels ou de Dark Post.");
 
   if (hasAgency()) {
     const a = parseFloat(form.elements.nf_agencia_percentual.value), i = parseFloat(form.elements.nf_influenciador_percentual.value);
