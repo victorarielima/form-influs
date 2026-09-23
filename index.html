@@ -131,6 +131,21 @@
   .suffix input { padding-right: 40px; }
   .suffix::after { content: "%"; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-weight: 600; }
 
+  /* ---------- Sim / Não ---------- */
+  .radios { display: flex; gap: 10px; }
+  .radio { position: relative; cursor: pointer; }
+  .radio input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .radio span {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 88px; min-height: 48px;
+    padding: 0 22px; border: 1.5px solid var(--line); border-radius: 999px; font-weight: 600;
+    transition: border-color .15s, background .15s, color .15s;
+  }
+  .radio:hover span { border-color: var(--peach); }
+  .radio input:checked + span { background: var(--red); border-color: var(--red); color: var(--white); }
+  .radio input:focus-visible + span { box-shadow: 0 0 0 4px rgba(249,24,45,.2); }
+  .field.invalid .radio span { border-color: var(--error); }
+  .field[hidden] { display: none; }
+
   /* ---------- Agência toggle ---------- */
   .toggle {
     display: flex; align-items: center; gap: 16px; cursor: pointer;
@@ -297,6 +312,8 @@ const SECTIONS = [
     { name: "escopo_dark_post", label: "Dark Post", col: 3, type: "int", optional: true, optionalText: "se acordado", placeholder: "Quantidade", hint: "Caso esse formato tenha sido acordado durante as negociações sobre a parceria" },
     { name: "escopo_impulsionamento_dias", label: "Impulsionamento", col: 3, type: "int", placeholder: "Ex.: 30", hint: "Quantidade de dias" },
     { name: "escopo_periodo", label: "Período da parceria", col: 3, placeholder: "Ex.: 1 mês de parceria (outubro)", hint: "Quantidade de meses e quais meses" },
+    { name: "escopo_permuta", label: "Escopo negociado em formato permuta?", col: 3, type: "radio", options: ["Sim", "Não"] },
+    { name: "escopo_valor_creditos", label: "Valor dos créditos que foram negociados", col: 3, type: "money", placeholder: "Ex.: R$ 1.400,00", hint: "Créditos no site Evino", showIf: { name: "escopo_permuta", value: "Sim" } },
     { name: "escopo_valor", label: "Valor do escopo", col: 3, type: "money", placeholder: "Ex.: R$ 4.000,00" },
   ]},
   { title: "Dados da testemunha", sub: "Pessoa que assinará o contrato como testemunha.", fields: [
@@ -325,10 +342,17 @@ const CHECK_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" 
 
 function renderField(f) {
   const id = `f_${f.name}`;
-  const agencyAttr = f.agency ? ' data-agency hidden class="agency-only ' : ' class="';
+  const showIf = f.showIf ? ` data-show-if="${f.showIf.name}" data-show-value="${esc(f.showIf.value)}" hidden` : "";
+  const agencyAttr = (f.agency ? ' data-agency hidden class="agency-only ' : ' class="').replace(' class=', `${showIf} class=`);
   const labelTxt = `${esc(f.label)} ${f.optional ? `<span class="opt">(${f.optionalText || "se houver"})</span>` : '<span class="req" aria-hidden="true">*</span>'}`;
   let control;
-  if (f.type === "select") {
+  if (f.type === "radio") {
+    return `<div${agencyAttr}field col-${f.col || 6}" data-name="${f.name}" role="radiogroup" aria-label="${esc(f.label)}">
+      <span class="label">${labelTxt}</span>
+      <div class="radios">${f.options.map(o => `<label class="radio"><input type="radio" name="${f.name}" value="${esc(o)}"><span>${esc(o)}</span></label>`).join("")}</div>
+      <div class="err"></div>
+    </div>`;
+  } else if (f.type === "select") {
     control = `<select id="${id}" name="${f.name}"><option value="">Selecione</option>${f.options.map(o => `<option>${esc(o)}</option>`).join("")}</select>`;
   } else if (f.type === "file") {
     return `<div${agencyAttr}field col-6" data-name="${f.name}">
@@ -477,6 +501,18 @@ function syncAgency() {
 agencyToggle.addEventListener("change", syncAgency);
 syncAgency();
 
+// ---------- Campos condicionais (ex.: créditos só quando permuta = Sim) ----------
+function syncConditional() {
+  document.querySelectorAll("[data-show-if]").forEach(field => {
+    const show = form.elements[field.dataset.showIf].value === field.dataset.showValue;
+    field.hidden = !show;
+    field.querySelectorAll("input, select").forEach(i => i.disabled = !show);
+    if (!show) field.classList.remove("invalid");
+  });
+}
+form.addEventListener("change", (e) => { if (e.target.type === "radio") syncConditional(); });
+syncConditional();
+
 // ---------- Upload ----------
 const fmtSize = (b) => b < 1024 * 1024 ? `${Math.round(b / 1024)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`;
 document.querySelectorAll("[data-upload]").forEach(box => {
@@ -512,7 +548,9 @@ function validate() {
   document.querySelectorAll(".field[data-name]").forEach(field => {
     field.classList.remove("invalid");
     const el = form.elements[field.dataset.name];
-    if (!el || el.matches(":disabled")) return; // :disabled cobre campos dentro de fieldset desativado
+    if (!el) return;
+    if (el instanceof RadioNodeList) return el.value ? null : mark(field, "Selecione uma opção.");
+    if (el.matches(":disabled")) return; // :disabled cobre campos dentro de fieldset desativado
     const optional = !field.querySelector(".req");
     if (el.type === "file") {
       const file = el.files[0];
@@ -529,7 +567,7 @@ function validate() {
     else if (type === "cep" && digits(v).length !== 8) mark(field, "CEP inválido.");
     else if (type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) mark(field, "E-mail inválido.");
     else if (type === "tel" && digits(v).length < 10) mark(field, "Telefone inválido.");
-    else if (type === "money" && !(parseInt(digits(v), 10) > 0)) mark(field, "Informe o valor do escopo.");
+    else if (type === "money" && !(parseInt(digits(v), 10) > 0)) mark(field, "Informe um valor maior que zero.");
     else if (type === "percent") {
       const p = parseFloat(v.replace(",", "."));
       if (isNaN(p) || p < 0 || p > 100) mark(field, "Informe um valor entre 0 e 100.");
