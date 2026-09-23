@@ -498,7 +498,7 @@ function validate() {
   document.querySelectorAll(".field[data-name]").forEach(field => {
     field.classList.remove("invalid");
     const el = form.elements[field.dataset.name];
-    if (!el || el.disabled) return;
+    if (!el || el.matches(":disabled")) return; // :disabled cobre campos dentro de fieldset desativado
     const optional = !field.querySelector(".req");
     if (el.type === "file") {
       const file = el.files[0];
