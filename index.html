@@ -226,10 +226,10 @@
         <span>Declaro que as informações e documentos enviados são verdadeiros e autorizo a Evino a utilizá-los para a elaboração do contrato e a realização dos pagamentos, conforme a LGPD.</span>
       </label>
       <div class="field" id="consent-field"><div class="err">Você precisa aceitar para enviar.</div></div>
+      <div class="form-alert error" id="alert" role="alert"></div>
       <div class="actions">
         <button type="submit" class="btn" id="submit"><span class="spinner"></span><span class="btn-label">Enviar cadastro</span></button>
       </div>
-      <div class="form-alert error" id="alert" role="alert"></div>
     </section>
   </form>
 
@@ -552,7 +552,14 @@ const alertBox = document.getElementById("alert");
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   alertBox.classList.remove("show");
-  if (!validate()) return;
+  if (!validate()) {
+    const count = document.querySelectorAll(".field.invalid").length;
+    alertBox.textContent = count === 1
+      ? "Falta corrigir 1 campo. Ele está destacado em vermelho no formulário."
+      : `Faltam corrigir ${count} campos. Eles estão destacados em vermelho no formulário.`;
+    alertBox.classList.add("show");
+    return;
+  }
 
   const data = new FormData(form); // campos de agência desabilitados ficam de fora automaticamente
   data.set("tem_agencia", hasAgency() ? "sim" : "nao");
@@ -567,9 +574,10 @@ form.addEventListener("submit", async (e) => {
     document.getElementById("success").hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (err) {
-    console.error(err);
+    console.error("Falha ao enviar para o webhook:", err);
     alertBox.textContent = "Não conseguimos enviar agora. Verifique sua conexão e tente novamente. Se o erro continuar, fale com o time Evino.";
     alertBox.classList.add("show");
+    alertBox.scrollIntoView({ behavior: "smooth", block: "center" });
   } finally {
     btn.disabled = false; btn.classList.remove("loading");
     btn.querySelector(".btn-label").textContent = "Enviar cadastro";
